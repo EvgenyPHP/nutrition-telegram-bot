@@ -28,7 +28,9 @@ class NutritionForm(StatesGroup):
     goal = State()
 
 
-@dp.message(commands="start")
+from aiogram.filters import Command
+
+@dp.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("👋 Привет! Давай подберём тебе питание.\n\nВыбери пол:", reply_markup=gender_keyboard())
