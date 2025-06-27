@@ -25,7 +25,9 @@ class Form(StatesGroup):
     done = State()
 
 
-@dp.message(F.text == "/start")
+@dp.message(F.text.in_(["/start", "start"]))
+async def cmd_start(message: Message, state: FSMContext):
+    ...
 async def cmd_start(message: Message, state: FSMContext):
     await message.answer(
         "Привет! Я помогу рассчитать твою норму КБЖУ. Выбери цель:",
