@@ -1,9 +1,3 @@
-import os
-import asyncio
-import logging
-from dotenv import load_dotenv
-from fpdf import FPDF
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.types import (
@@ -12,19 +6,20 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
     FSInputFile
 )
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.fsm.storage.memory import MemoryStorage
+from fpdf import FPDF
+import logging
+import asyncio
+import os
 
-# Загрузка переменных окружения
-load_dotenv()
+# Получение токена из переменных окружения
 TOKEN = os.getenv("BOT_TOKEN")
-
-# Проверка на случай, если переменная не установлена
 if not TOKEN:
     raise ValueError("Переменная окружения BOT_TOKEN не установлена!")
 
-# Инициализация бота
+# Настройка бота
 bot = Bot(token=TOKEN, default=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +32,6 @@ class Form(StatesGroup):
 # Команда /start
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
-    await state.clear()
     await message.answer(
         "Привет! Я помогу рассчитать твою норму КБЖУ. Выбери цель:",
         reply_markup=ReplyKeyboardMarkup(
@@ -51,7 +45,7 @@ async def cmd_start(message: Message, state: FSMContext):
     )
     await state.set_state(Form.goal)
 
-# Обработка выбора цели
+# Обработка цели
 @dp.message(Form.goal, F.text.in_(["Похудение", "Поддержание", "Набор массы"]))
 async def process_goal(message: Message, state: FSMContext):
     goal = message.text
@@ -60,6 +54,7 @@ async def process_goal(message: Message, state: FSMContext):
         "Поддержание": {"calories": 1624, "protein": 74, "fat": 49, "carbs": 222},
         "Набор массы": {"calories": 1974, "protein": 74, "fat": 49, "carbs": 309}
     }
+
     await state.update_data(result=result[goal])
     res = result[goal]
 
@@ -70,6 +65,7 @@ async def process_goal(message: Message, state: FSMContext):
         f"Жиры: {res['fat']} г\n"
         f"Углеводы: {res['carbs']} г"
     )
+
     await message.answer(text)
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -80,14 +76,11 @@ async def process_goal(message: Message, state: FSMContext):
     await message.answer("Что хочешь сделать дальше?", reply_markup=keyboard)
     await state.set_state(Form.done)
 
-# Кнопка: Сохранить в PDF
+# Кнопка PDF
 @dp.callback_query(F.data == "save_pdf")
 async def save_pdf(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     result = data.get("result")
-    if not result:
-        await callback.answer("Нет данных для PDF.")
-        return
 
     pdf = FPDF()
     pdf.add_page()
@@ -107,7 +100,7 @@ async def save_pdf(callback: CallbackQuery, state: FSMContext):
     os.remove(file_path)
     await callback.answer()
 
-# Кнопка: Начать заново
+# Кнопка перезапуска
 @dp.callback_query(F.data == "restart")
 async def restart(callback: CallbackQuery, state: FSMContext):
     await state.clear()
