@@ -1,16 +1,17 @@
-
 import asyncio
+import io
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.types import Message
 from aiogram.enums import ParseMode
+from aiogram.types import Message, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters import Command
+from aiogram.client.default import DefaultBotProperties
+from fpdf import FPDF
 
 TOKEN = '8134057692:AAHMq4q3e2RqofrxKXp9Gqp0BRtePdzIh5c'
-CHAT_ID = -1001996814306  # куда присылать результаты
-
-from aiogram.client.default import DefaultBotProperties
+CHAT_ID = -1001996814306
 
 bot = Bot(
     token=TOKEN,
@@ -27,8 +28,6 @@ class NutritionForm(StatesGroup):
     activity2 = State()
     goal = State()
 
-
-from aiogram.filters import Command
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
@@ -77,13 +76,11 @@ async def process_goal(message: Message, state: FSMContext):
     await state.update_data(goal=message.text)
     data = await state.get_data()
 
-    # Расчёт
     kfa = get_kfa(data["activity1"], data["activity2"])
     calories = calc_calories(data["gender"], data["age"], data["weight"], kfa, data["goal"])
     macros = calc_macros(data["weight"], calories, data["gender"])
 
-    # Отправка пользователю
-    await message.answer(
+    result_text = (
         f"<b>Твой результат:</b>\n"
         f"Калории: <b>{calories} ккал</b>\n"
         f"Белки: {macros['protein']} г\n"
@@ -91,9 +88,11 @@ async def process_goal(message: Message, state: FSMContext):
         f"Углеводы: {macros['carbs']} г"
     )
 
-    # Отправка тебе
+    await message.answer(result_text)
+
     username = message.from_user.username or "неизвестен"
-    msg = (
+    await bot.send_message(
+        CHAT_ID,
         f"📥 <b>Новая анкета от @{username}</b>\n\n"
         f"Пол: {data['gender']}\n"
         f"Возраст: {data['age']}\n"
@@ -104,48 +103,93 @@ async def process_goal(message: Message, state: FSMContext):
         f"<b>КБЖУ:</b>\n"
         f"{calories} ккал | Б: {macros['protein']} г | Ж: {macros['fat']} г | У: {macros['carbs']} г"
     )
-    await bot.send_message(CHAT_ID, msg)
 
+    await state.update_data(pdf=f"Калории: {calories} ккал\nБелки: {macros['protein']} г\nЖиры: {macros['fat']} г\nУглеводы: {macros['carbs']} г")
     await state.clear()
 
+    await message.answer(
+        "Что хочешь сделать дальше?",
+        reply_markup=types.ReplyKeyboardMarkup(
+            keyboard=[
+                [types.KeyboardButton(text="📄 Сохранить в PDF")],
+                [types.KeyboardButton(text="📢 Подписаться на канал")],
+                [types.KeyboardButton(text="/start")]
+            ],
+            resize_keyboard=True
+        )
+    )
 
-# ────── Кнопки ──────
+
+@dp.message(F.text == "📄 Сохранить в PDF")
+async def generate_pdf(message: Message, state: FSMContext):
+    data = await state.get_data()
+    text = data.get("pdf", "Нет данных для PDF.")
+    pdf_bytes = create_pdf(text)
+    await message.answer_document(BufferedInputFile(pdf_bytes, filename="ration.pdf"))
+
+
+@dp.message(F.text == "📢 Подписаться на канал")
+async def handle_channel(message: Message):
+    await message.answer("Подписывайся на канал 👉 https://t.me/doc_kalinichenko")
+
+
+def create_pdf(text: str) -> bytes:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=14)
+    for line in text.split("\n"):
+        pdf.cell(200, 10, txt=line, ln=True)
+    buf = io.BytesIO()
+    pdf.output(buf)
+    return buf.getvalue()
+
+
+# --- Клавиатуры ---
 def gender_keyboard():
-    return types.ReplyKeyboardMarkup(keyboard=[
-        [types.KeyboardButton(text="Женщина")],
-        [types.KeyboardButton(text="Мужчина")]
-    ], resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(
+        keyboard=[[types.KeyboardButton(text="Женщина")], [types.KeyboardButton(text="Мужчина")]],
+        resize_keyboard=True
+    )
 
 
 def activity1_keyboard():
-    return types.ReplyKeyboardMarkup(keyboard=[
-        [types.KeyboardButton(text="В офисе")],
-        [types.KeyboardButton(text="В офисе, но часто передвигаюсь")],
-        [types.KeyboardButton(text="Весь день сижу дома")],
-        [types.KeyboardButton(text="Весь день на ногах")],
-        [types.KeyboardButton(text="Физический труд")]
-    ], resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(
+        keyboard=[
+            [types.KeyboardButton(text="В офисе")],
+            [types.KeyboardButton(text="В офисе, но часто передвигаюсь")],
+            [types.KeyboardButton(text="Весь день сижу дома")],
+            [types.KeyboardButton(text="Весь день на ногах")],
+            [types.KeyboardButton(text="Физический труд")]
+        ],
+        resize_keyboard=True
+    )
 
 
 def activity2_keyboard():
-    return types.ReplyKeyboardMarkup(keyboard=[
-        [types.KeyboardButton(text="Минимум или отсутствие")],
-        [types.KeyboardButton(text="Небольшие 1-3 раза в неделю")],
-        [types.KeyboardButton(text="3-5 раз в неделю")],
-        [types.KeyboardButton(text="Ежедневные прогулки")],
-        [types.KeyboardButton(text="Интенсивные каждый день")]
-    ], resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(
+        keyboard=[
+            [types.KeyboardButton(text="Минимум или отсутствие")],
+            [types.KeyboardButton(text="Небольшие 1-3 раза в неделю")],
+            [types.KeyboardButton(text="3-5 раз в неделю")],
+            [types.KeyboardButton(text="Ежедневные прогулки")],
+            [types.KeyboardButton(text="Интенсивные каждый день")]
+        ],
+        resize_keyboard=True
+    )
 
 
 def goal_keyboard():
-    return types.ReplyKeyboardMarkup(keyboard=[
-        [types.KeyboardButton(text="Поддержание")],
-        [types.KeyboardButton(text="Похудение")],
-        [types.KeyboardButton(text="Набор массы")]
-    ], resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(
+        keyboard=[
+            [types.KeyboardButton(text="Поддержание")],
+            [types.KeyboardButton(text="Похудение")],
+            [types.KeyboardButton(text="Набор массы")]
+        ],
+        resize_keyboard=True
+    )
 
 
-# ────── Расчёты ──────
+# --- Формулы ---
 def get_kfa(activity1, activity2):
     scores = {
         "В офисе": 1,
@@ -157,11 +201,9 @@ def get_kfa(activity1, activity2):
         "Небольшие 1-3 раза в неделю": 1.3,
         "3-5 раз в неделю": 1.5,
         "Ежедневные прогулки": 1.3,
-        "Интенсивные каждый день": 1.5,
+        "Интенсивные каждый день": 1.5
     }
-    val1 = scores.get(activity1, 1)
-    val2 = scores.get(activity2, 1)
-    avg = (val1 + val2) / 2
+    avg = (scores.get(activity1, 1) + scores.get(activity2, 1)) / 2
     if avg <= 1.1:
         return 1
     elif avg <= 1.4:
@@ -185,6 +227,7 @@ def calc_calories(gender, age, weight, kfa, goal):
             base = (0.048 * weight + 3.653) * 240
         else:
             base = (0.049 * weight + 2.459) * 240
+
     result = base * kfa
     if goal.lower().startswith("пох"):
         result -= 200
@@ -200,6 +243,7 @@ def calc_macros(weight, calories, gender):
     else:
         protein = round(weight * 2)
         fat = round(weight * 1.1)
+
     protein_kcal = protein * 4
     fat_kcal = fat * 9
     carbs_kcal = calories - protein_kcal - fat_kcal
@@ -209,6 +253,7 @@ def calc_macros(weight, calories, gender):
 
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
