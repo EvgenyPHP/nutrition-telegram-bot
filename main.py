@@ -10,7 +10,12 @@ from aiogram.fsm.storage.memory import MemoryStorage
 TOKEN = '8134057692:AAHMq4q3e2RqofrxKXp9Gqp0BRtePdzIh5c'
 CHAT_ID = -1001996814306  # куда присылать результаты
 
-bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+from aiogram.client.default import DefaultBotProperties
+
+bot = Bot(
+    token=TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 dp = Dispatcher(storage=MemoryStorage())
 
 
