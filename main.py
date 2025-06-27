@@ -51,14 +51,14 @@ async def process_goal(message: Message, state: FSMContext):
     res = result[goal]
     text = (
         f"""<b>Твой результат:</b>
-"""
-        f"""Калории: <b>{res['calories']} ккал</b>
-"""
-        f"""Белки: {res['protein']} г
-"""
-        f"""Жиры: {res['fat']} г
-"""
-        f"""Углеводы: {res['carbs']} г"
+"
+        f"Калории: <b>{res['calories']} ккал</b>
+"
+        f"Белки: {res['protein']} г
+"
+        f"Жиры: {res['fat']} г
+"
+        f"Углеводы: {res['carbs']} г"""
     )
     await message.answer(text)
 
