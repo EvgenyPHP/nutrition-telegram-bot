@@ -1,3 +1,4 @@
+
 import asyncio
 import io
 from aiogram import Bot, Dispatcher, F, types
@@ -13,10 +14,7 @@ from fpdf import FPDF
 TOKEN = '8134057692:AAHMq4q3e2RqofrxKXp9Gqp0BRtePdzIh5c'
 CHAT_ID = -1001996814306
 
-bot = Bot(
-    token=TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-)
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
 
 
@@ -31,6 +29,7 @@ class NutritionForm(StatesGroup):
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
+    print("🚀 /start запущен")
     await state.clear()
     await message.answer("👋 Привет! Давай подберём тебе питание.\n\nВыбери пол:", reply_markup=gender_keyboard())
     await state.set_state(NutritionForm.gender)
@@ -38,6 +37,7 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.gender)
 async def process_gender(message: Message, state: FSMContext):
+    print("▶️ Ввод пола")
     await state.update_data(gender=message.text)
     await message.answer("Укажи возраст:")
     await state.set_state(NutritionForm.age)
@@ -45,6 +45,7 @@ async def process_gender(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.age)
 async def process_age(message: Message, state: FSMContext):
+    print("▶️ Ввод возраста")
     await state.update_data(age=int(message.text))
     await message.answer("Укажи вес (в кг):")
     await state.set_state(NutritionForm.weight)
@@ -52,6 +53,7 @@ async def process_age(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.weight)
 async def process_weight(message: Message, state: FSMContext):
+    print("▶️ Ввод веса")
     await state.update_data(weight=float(message.text))
     await message.answer("Выбери основную активность:", reply_markup=activity1_keyboard())
     await state.set_state(NutritionForm.activity1)
@@ -59,6 +61,7 @@ async def process_weight(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.activity1)
 async def process_activity1(message: Message, state: FSMContext):
+    print("▶️ Активность 1")
     await state.update_data(activity1=message.text)
     await message.answer("Выбери дополнительную активность:", reply_markup=activity2_keyboard())
     await state.set_state(NutritionForm.activity2)
@@ -66,6 +69,7 @@ async def process_activity1(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.activity2)
 async def process_activity2(message: Message, state: FSMContext):
+    print("▶️ Активность 2")
     await state.update_data(activity2=message.text)
     await message.answer("Какова твоя цель?", reply_markup=goal_keyboard())
     await state.set_state(NutritionForm.goal)
@@ -73,6 +77,7 @@ async def process_activity2(message: Message, state: FSMContext):
 
 @dp.message(NutritionForm.goal)
 async def process_goal(message: Message, state: FSMContext):
+    print("🎯 Обработка цели и финальный расчёт")
     await state.update_data(goal=message.text)
     data = await state.get_data()
 
@@ -104,9 +109,7 @@ async def process_goal(message: Message, state: FSMContext):
         f"{calories} ккал | Б: {macros['protein']} г | Ж: {macros['fat']} г | У: {macros['carbs']} г"
     )
 
-    await state.update_data(pdf=f"Калории: {calories} ккал\nБелки: {macros['protein']} г\nЖиры: {macros['fat']} г\nУглеводы: {macros['carbs']} г")
-    await state.clear()
-
+    # Показ кнопок СНАЧАЛА
     await message.answer(
         "Что хочешь сделать дальше?",
         reply_markup=types.ReplyKeyboardMarkup(
@@ -119,9 +122,14 @@ async def process_goal(message: Message, state: FSMContext):
         )
     )
 
+    # Затем сохраняем PDF и очищаем состояние
+    await state.update_data(pdf=f"Калории: {calories} ккал\nБелки: {macros['protein']} г\nЖиры: {macros['fat']} г\nУглеводы: {macros['carbs']} г")
+    await state.clear()
+
 
 @dp.message(F.text == "📄 Сохранить в PDF")
 async def generate_pdf(message: Message, state: FSMContext):
+    print("📄 PDF-запрос")
     data = await state.get_data()
     text = data.get("pdf", "Нет данных для PDF.")
     pdf_bytes = create_pdf(text)
